@@ -66,6 +66,11 @@ param API_PROTOCOL string = ''
 param API_HOSTNAME string = ''
 param API_PORT string = ''
 
+// NextAuth.js secret for frontend authentication
+@secure()
+@description('Secret for NextAuth.js authentication')
+param AUTH_SECRET string = ''
+
 // Environment name for azd
 param environmentName string = ''
 // param principalId string = '' // Unused parameter removed
@@ -258,6 +263,7 @@ module containerAppFrontend './modules/containerApp.bicep' = {
     API_PORT: API_PORT == '' ? '443' : API_PORT
     // Use the backend external FQDN (public Internet)
     API_HOSTNAME: API_HOSTNAME == '' ? '${containerAppNameBackend}.${containerAppEnvMod.outputs.containerAppDefaultDomain}' : API_HOSTNAME
+    AUTH_SECRET: AUTH_SECRET
     azdServiceName: 'frontend'
   }
 }

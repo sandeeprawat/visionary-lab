@@ -283,8 +283,33 @@ async def stream_video_generation_with_analysis(
     SSE streaming endpoint for video generation with real-time progress updates.
     Non-blocking - uses asyncio.sleep() instead of time.sleep().
     """
+    # IMPORTANT: Read image data BEFORE the generator starts!
+    # UploadFile objects get closed when the endpoint returns StreamingResponse,
+    # so we must read them synchronously here before the async generator runs.
+    processed_images: List[bytes] = []
+    image_filenames: List[str] = []
+    image_validation_error: Optional[str] = None
+    
+    if images:
+        for idx, image_file in enumerate(images):
+            content = await image_file.read()
+            if len(content) > 25 * 1024 * 1024:
+                image_validation_error = f"Image {idx+1} exceeds 25MB limit"
+                break
+            if not image_file.content_type or not image_file.content_type.startswith("image/"):
+                image_validation_error = f"File {idx+1} is not a valid image"
+                break
+            processed_images.append(content)
+            image_filenames.append(
+                image_file.filename or f"image_{idx+1}.jpg")
+
     async def event_generator():
         try:
+            # Check for image validation errors that occurred before generator started
+            if image_validation_error:
+                yield sse_event("error", {"error": image_validation_error})
+                return
+
             # Validate services
             if sora_client is None:
                 yield sse_event("error", {"error": "Video generation service is currently unavailable."})
@@ -304,22 +329,6 @@ async def stream_video_generation_with_analysis(
 
             selected_folder = folder_path or (
                 metadata_dict.get("folder") if metadata_dict else "")
-
-            # Process images if provided
-            processed_images: List[bytes] = []
-            image_filenames: List[str] = []
-            if images:
-                for idx, image_file in enumerate(images):
-                    content = await image_file.read()
-                    if len(content) > 25 * 1024 * 1024:
-                        yield sse_event("error", {"error": f"Image {idx+1} exceeds 25MB limit"})
-                        return
-                    if not image_file.content_type or not image_file.content_type.startswith("image/"):
-                        yield sse_event("error", {"error": f"File {idx+1} is not a valid image"})
-                        return
-                    processed_images.append(content)
-                    image_filenames.append(
-                        image_file.filename or f"image_{idx+1}.jpg")
 
             # Create job
             yield sse_event("status", {"step": "creating_job", "message": "Creating video generation job..."})
@@ -345,7 +354,7 @@ async def stream_video_generation_with_analysis(
             yield sse_event("created", {"job_id": job_response.id, "status": job_response.status})
 
             # Poll for completion with progress updates (non-blocking!)
-            max_wait_time = 300  # 5 minutes
+            max_wait_time = 600  # 10 minutes (video generation can take 5-8 minutes)
             poll_interval = 3  # Check every 3 seconds
             elapsed_time = 0
 
@@ -634,7 +643,7 @@ async def create_video_generation_with_analysis_upload(
             f"Created job {job_response.id}, waiting for completion...")
 
         # Poll job until completion (non-blocking!)
-        max_wait_time = 300
+        max_wait_time = 600  # 10 minutes (video generation can take 5-8 minutes)
         poll_interval = 5
         elapsed_time = 0
         while elapsed_time < max_wait_time:
@@ -855,7 +864,7 @@ async def create_video_generation_with_analysis(
             f"Created job {job_response.id}, waiting for completion...")
 
         # Step 2: Poll for job completion (non-blocking!)
-        max_wait_time = 300  # 5 minutes max wait
+        max_wait_time = 600  # 10 minutes (video generation can take 5-8 minutes)
         poll_interval = 5  # Check every 5 seconds
         elapsed_time = 0
 

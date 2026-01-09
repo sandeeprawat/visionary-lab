@@ -3,10 +3,72 @@ import os
 import logging
 import io
 from typing import List, Optional
+from PIL import Image
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def resize_image_to_dimensions(image_bytes: bytes, target_width: int, target_height: int) -> bytes:
+    """
+    Resize an image to exactly match the target dimensions.
+    The image is resized to cover the target dimensions (may crop edges),
+    then center-cropped to exactly match width and height.
+    
+    Args:
+        image_bytes: The original image as bytes
+        target_width: The target width in pixels
+        target_height: The target height in pixels
+        
+    Returns:
+        The resized image as JPEG bytes
+    """
+    img = Image.open(io.BytesIO(image_bytes))
+    
+    # Convert to RGB if necessary (handles PNG with transparency, etc.)
+    if img.mode in ('RGBA', 'LA', 'P'):
+        # Create a white background
+        background = Image.new('RGB', img.size, (255, 255, 255))
+        if img.mode == 'P':
+            img = img.convert('RGBA')
+        background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+        img = background
+    elif img.mode != 'RGB':
+        img = img.convert('RGB')
+    
+    orig_width, orig_height = img.size
+    target_ratio = target_width / target_height
+    orig_ratio = orig_width / orig_height
+    
+    # Resize to cover the target dimensions
+    if orig_ratio > target_ratio:
+        # Image is wider than target, scale by height
+        new_height = target_height
+        new_width = int(orig_width * (target_height / orig_height))
+    else:
+        # Image is taller than target, scale by width
+        new_width = target_width
+        new_height = int(orig_height * (target_width / orig_width))
+    
+    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    
+    # Center crop to exact dimensions
+    left = (new_width - target_width) // 2
+    top = (new_height - target_height) // 2
+    right = left + target_width
+    bottom = top + target_height
+    
+    img = img.crop((left, top, right, bottom))
+    
+    # Save to bytes
+    output = io.BytesIO()
+    img.save(output, format='JPEG', quality=95)
+    output.seek(0)
+    
+    logger.info(f"Resized image from {orig_width}x{orig_height} to {target_width}x{target_height}")
+    
+    return output.read()
 
 
 def convert_sora2_response_to_job_format(sora2_response):
@@ -26,10 +88,13 @@ def convert_sora2_response_to_job_format(sora2_response):
     sora2_status = sora2_response.get("status", "queued")
     mapped_status = status_map.get(sora2_status, sora2_status)
     
+    # Handle prompt - may be None or missing
+    prompt_value = sora2_response.get("prompt")
+    
     result = {
         "id": sora2_response.get("id"),
         "status": mapped_status,
-        "prompt": sora2_response.get("prompt", ""),
+        "prompt": prompt_value if prompt_value is not None else "",
         "n_variants": 1,  # Sora 2 always generates 1 video
         "model": sora2_response.get("model", "sora-2"),
     }
@@ -215,6 +280,10 @@ class Sora:
         first_image = images[0]
         first_filename = image_filenames[0] if image_filenames else "image.jpg"
         
+        # IMPORTANT: Resize image to match requested video dimensions
+        # Sora API requires input image to exactly match output video dimensions
+        resized_image = resize_image_to_dimensions(first_image, width, height)
+        
         # Convert duration to Sora 2 supported values (must be strings: "4", "8", or "12")
         if n_seconds <= 6:
             seconds = "4"
@@ -229,7 +298,7 @@ class Sora:
         multipart_headers = dict(self.headers)
 
         files = {
-            "input_reference": (first_filename, io.BytesIO(first_image), "image/jpeg")
+            "input_reference": (first_filename, io.BytesIO(resized_image), "image/jpeg")
         }
 
         data = {
@@ -240,7 +309,7 @@ class Sora:
         }
 
         logger.info(
-            f"Creating Sora 2 video job with image reference: {first_filename}, prompt: {prompt[:50]}...")
+            f"Creating Sora 2 video job with image reference: {first_filename} (resized to {width}x{height}), prompt: {prompt[:50]}...")
 
         response = await client.post(
             url,

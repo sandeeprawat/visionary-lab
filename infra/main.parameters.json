@@ -46,6 +46,9 @@
     },
     "SORA_DEPLOYMENT": {
       "value": "${SORA_DEPLOYMENT}"
+    },
+    "AUTH_SECRET": {
+      "value": "${AUTH_SECRET}"
     }
   }
 }
