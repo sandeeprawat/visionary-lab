@@ -23,11 +23,28 @@ export interface VideoMetadata {
 }
 
 /**
+ * Helper to extract prompt from metadata, checking both top-level and custom_metadata
+ */
+function getPromptFromMetadata(metadata: GalleryItem['metadata']): string | undefined {
+  // First check top-level prompt (new format)
+  if (metadata?.prompt && typeof metadata.prompt === 'string') {
+    return metadata.prompt;
+  }
+  // Fallback to custom_metadata.prompt (legacy format from frontend polling upload)
+  const customMeta = metadata as Record<string, unknown>;
+  if (customMeta?.prompt && typeof customMeta.prompt === 'string') {
+    return customMeta.prompt;
+  }
+  return undefined;
+}
+
+/**
  * Convert GalleryItem to VideoMetadata
  */
 async function mapGalleryItemToVideoMetadata(item: GalleryItem): Promise<VideoMetadata> {
-  // Extract title from prompt (preferred) or name
-  const title = item.metadata?.prompt || item.name.split('.')[0].replace(/_/g, ' ');
+  // Extract title from prompt (preferred) or name, with fallback to custom_metadata
+  const prompt = getPromptFromMetadata(item.metadata);
+  const title = prompt || item.name.split('.')[0].replace(/_/g, ' ');
   
   // Extract description from metadata
   const description = item.metadata?.description || '';
@@ -181,8 +198,9 @@ async function mapGalleryItemToImageMetadata(item: GalleryItem): Promise<ImageMe
       return [];
     };
 
-    // Extract title from prompt (preferred) or name
-    const title = item.metadata?.prompt || item.name.split('.')[0].replace(/_/g, ' ');
+    // Extract title from prompt (preferred) or name, with fallback to custom_metadata
+    const prompt = getPromptFromMetadata(item.metadata);
+    const title = prompt || item.name.split('.')[0].replace(/_/g, ' ');
 
     // Extract description from CosmosDB metadata, falling back to prompt-derived text
     const descriptionSource = item.metadata?.analysis?.summary ?? item.metadata?.description ?? '';

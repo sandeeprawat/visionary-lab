@@ -477,8 +477,19 @@ async def upload_asset(
                 if "height" in result:
                     cosmos_data["height"] = result["height"]
 
-                # Add custom metadata
+                # Extract prompt from custom metadata and store at top level
+                # This ensures consistency with the SSE streaming upload path
                 if metadata_dict:
+                    # Promote prompt to top level if present in custom metadata
+                    if "prompt" in metadata_dict:
+                        cosmos_data["prompt"] = metadata_dict["prompt"]
+                    # Promote model to top level if present
+                    if "model" in metadata_dict:
+                        cosmos_data["model"] = metadata_dict["model"]
+                    # Promote generation_id to top level if present  
+                    if "generationId" in metadata_dict:
+                        cosmos_data["generation_id"] = metadata_dict["generationId"]
+                    # Store remaining metadata as custom_metadata
                     cosmos_data["custom_metadata"] = metadata_dict
 
                 cosmos_metadata = AssetMetadataCreateRequest(**cosmos_data)

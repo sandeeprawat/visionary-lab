@@ -151,11 +151,13 @@ def convert_sora2_response_to_job_format(sora2_response):
 class Sora:
     """Async Sora 2 client using httpx for non-blocking HTTP requests."""
 
+    # Supported video sizes (Sora 2 supports 1280x720 and 720x1280 only,
+    # but keeping larger sizes for Sora 1 compatibility)
     SUPPORTED_SIZES = [
-        "1280x720",   # Landscape
-        "720x1280",   # Portrait (default)
-        "1792x1024",  # Landscape
-        "1024x1792",  # Portrait
+        "1280x720",   # Landscape (Sora 1 & 2)
+        "720x1280",   # Portrait (Sora 1 & 2)
+        "1792x1024",  # Landscape (Sora 1 only)
+        "1024x1792",  # Portrait (Sora 1 only)
     ]
 
     SUPPORTED_DURATIONS = ["4", "8", "12"]
