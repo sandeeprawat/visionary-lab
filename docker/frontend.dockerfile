@@ -33,8 +33,8 @@
 # # CMD ["npm", "run", "start"]
 
 
-# Use Node.js 19 as the base image for development
-FROM node:19-alpine
+# Use Node.js 22 LTS as the base image for development (Node 19 / Alpine 3.18 are end-of-life)
+FROM node:22-alpine
 
 # Set working directory
 WORKDIR /app

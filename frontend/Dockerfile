@@ -1,6 +1,8 @@
 # Production Docker image for Next.js application
-# Use Node.js 19 as the base image
-FROM node:19-alpine AS base
+# Use Node.js 22 LTS (Alpine) as the base image.
+# Node 19 / Alpine 3.18 are end-of-life and carry unpatched OS CVEs (openssl, busybox, musl)
+# plus an EOL-OS finding; Node 22 LTS ships a current, supported Alpine.
+FROM node:22-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -45,6 +47,13 @@ ENV NEXT_TELEMETRY_DISABLED 1
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
+
+# Remove npm, npx and corepack from the runtime image. The app runs `node server.js`
+# and needs no package manager at runtime. This strips npm's bundled, vulnerable
+# dependencies (tar/node-tar, ip, semver, minimatch, diff, ...) from the shipped image,
+# which are otherwise flagged by container image scanners.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 
 # Copy next.config.js and public folder
 COPY --from=builder /app/next.config.ts ./
