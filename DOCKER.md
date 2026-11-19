@@ -123,6 +123,15 @@ The Dockerfiles are configured for production use. For development:
 ## Backend Dockerfile Notes
 
 The backend Dockerfile:
+- Uses Debian 13 (trixie) and fails the build unless `libbrotli1` is at least
+  `1.1.0-2+deb13u1`, the Debian security update for the Brotli decoder.
+  Build with `--pull --no-cache` for security updates; restarting an existing
+  image does not update its packages. Verify the package in the resulting image
+  with `dpkg-query -W libbrotli1` and deploy by immutable digest.
+  Follow applicable change review, regression checks, and vulnerability scanning
+  before considering the rollout complete.
+  Check application-managed Brotli packages separately: an OS package update
+  does not update Python wheels or bundled runtimes.
 - Uses the official uv package manager approach as recommended in the [uv documentation](https://docs.astral.sh/uv/guides/integration/fastapi/#deployment)
 - Creates a virtual environment with `uv venv .venv`
 - Installs the fastapi-cli package in the virtual environment

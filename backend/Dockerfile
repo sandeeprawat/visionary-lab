@@ -1,12 +1,14 @@
 # Use Python 3.12 slim image
-FROM python:3.12-slim
+FROM python:3.12-slim-trixie
 
 # Install system dependencies needed for OpenCV
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
     libgthread-2.0-0 \
+    libbrotli1 \
     curl \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libbrotli1)" ge '1.1.0-2+deb13u1' \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv.
